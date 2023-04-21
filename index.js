@@ -116,6 +116,7 @@ app.post("/users/login", async (req, res) => {
 
 //Forgot Password API
 app.post("/users/forgotpass", async (req, res) => {
+  console.log("reached backend");
   const {
     email
   } = req.body;
@@ -144,15 +145,13 @@ app.post("/users/forgotpass", async (req, res) => {
       port: 465,
       secure: true,
       auth: {
-        //user: "sonu.azul@gmail.com",
-        //pass: "hpaeqcwqfxucclsh",
         user: process.env.SENDER_EMAIL,
         pass: process.env.SENDER_PASS,
       },
     });
 
     const mailOptions = {
-      from: `${SENDER_EMAIL}` ,
+      from: process.env.SENDER_EMAIL ,
       to: `${email}`,
       subject: "Test Email from Node.js",
       text: `Hello, reset your password using this link below ${API}/resetpass/${token}`,
