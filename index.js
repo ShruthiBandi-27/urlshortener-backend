@@ -201,7 +201,7 @@ app.post("/users/forgotpass", async (req, res) => {
   const token = jwt.sign({
     email: email
   }, process.env.SECRET_KEY);
-  //console.log(`token is ${token}`);
+
 
   try {
     //sending email to user
