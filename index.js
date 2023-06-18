@@ -7,6 +7,8 @@ dotenv.config();
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import cors from "cors";
+import bcrypt from "bcrypt";
+import {auth} from "./middleware/auth.js";
 
 const app = express();
 const MONGO_URL = process.env.MONGO_URL;
@@ -25,8 +27,48 @@ export const client = await createConnection();
 app.use(express.json());
 app.use(cors())
 
-app.get("/", (req, res) => {
+app.get("/", auth, (req, res) => {
   res.send("<h1>Hello,😊<br> Password Reset Application</h1>");
+});
+
+//welcome API
+app.post("/welcome/:token", async(req, res) => {
+  console.log("Welcome api");
+  const {
+    token
+  } = req.params;
+  console.log(`shruthi token ${token}`)
+  try {
+    const user = await client
+    .db("url_shortner")
+    .collection("users")
+    .findOne({
+      resetToken: token
+    });
+  //console.log(`user email: ${user.email}`);
+  if (!user) {
+    res.status(404).send({
+      message: "Invalid Token or Token expired"
+    });
+    return;
+  }
+  res.status(200).send({
+    message: "Login success"
+  });
+  }
+  catch(err) {
+    console.log({
+      message: err.message
+    });
+    res.status(505).send({
+      message: "Internal server Error"
+    });
+  }
+  // res.status(200).send({
+  //   message: " Hello welcome to url shortner app"
+  // })
+
+ // res.send("<h1>Hello,😊<br> Password Reset Application</h1>");
 });
 
 //Signup API
@@ -36,12 +78,13 @@ app.post("/users/signup", async (req, res) => {
   console.log(`email: ${email}, pass: ${password}`);
   try {
     const user = await client
-      .db("shruthi")
+      .db("url_shortner")
       .collection("users")
       .findOne({
         email: email
       });
     //console.log(`user email: ${user.email}`);
+
     if (user) {
       res.status(404).send({
         message: "User already exist"
@@ -49,13 +92,19 @@ app.post("/users/signup", async (req, res) => {
       return;
     }
 
+    //Creating hashed password
+    const salt = await bcrypt.genSalt(10);
+    console.log(`salt: ${salt}`);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    console.log(`email: ${email}, hashedPass: ${hashedPassword}`);
+
     //Creating user 
     await client
-      .db("shruthi")
+      .db("url_shortner")
       .collection("users")
       .insertOne({
         email: email,
-        password: password
+        password: hashedPassword
       });
     res.status(200).send({
       message: "Signup Successful"
@@ -77,12 +126,12 @@ app.post("/users/login", async (req, res) => {
   //console.log(`email: ${email}, pass: ${password}`);
   try {
     const user = await client
-      .db("shruthi")
+      .db("url_shortner")
       .collection("users")
       .findOne({
         email: email
       });
-    //console.log(`user email: ${user.email}`);
+    console.log(`user email: ${user.email}`);
     if (!user) {
       res.status(404).send({
         message: "Invalid Credentials"
@@ -91,17 +140,33 @@ app.post("/users/login", async (req, res) => {
     }
 
     const passwordFromDB = user.password;
+    const isPasswordMatched = await bcrypt.compare(password, passwordFromDB);
     //console.log(`DB pass: ${passwordFromDB}`);
-    if(passwordFromDB !== password) {
+    if(!isPasswordMatched) {
       res.status(404).send({
         message: "Invalid Credentials"
       });
       return;
-    }
+    } 
     else{
-      res.status(200).send({
-        message: "Login Successful"
+      const token = jwt.sign({id: user._id }, process.env.SECRET_KEY );
+      console.log(`token: ${token}`);
+
+      await client
+      .db("url_shortner")
+      .collection("users")
+      .updateOne({
+        email: email
+      }, {
+        $set: {
+          resetToken: token
+        }
       });
+      res.status(200).send({
+        message: "Login Successful",
+        token: token
+      })
+
     }
 
   } catch (err) {
@@ -122,7 +187,7 @@ app.post("/users/forgotpass", async (req, res) => {
   } = req.body;
   console.log(email);
   const userEmailFromDB = await client
-    .db("shruthi")
+    .db("url_shortner")
     .collection("users")
     .findOne({
       email: email
@@ -153,7 +218,7 @@ app.post("/users/forgotpass", async (req, res) => {
     const mailOptions = {
       from: process.env.SENDER_EMAIL ,
       to: `${email}`,
-      subject: "Test Email from Node.js",
+      subject: "URL shortener: Reset your password",
       text: `Hello, reset your password using this link below ${API}/resetpass/${token}`,
       //text: `Hello, reset your password using this link below http://localhost:3000/resetpass/${token}`,
     };
@@ -165,7 +230,7 @@ app.post("/users/forgotpass", async (req, res) => {
         console.log("Email sent: " + info.response);
         //store token in database
         await client
-          .db("shruthi")
+          .db("url_shortner")
           .collection("users")
           .updateOne({
             email: email
@@ -198,7 +263,7 @@ app.post("/users/resetpass/:token", async (req, res) => {
   //console.log(`req.query.token= ${req.params.token}`);
   try {
     const user = await client
-      .db("shruthi")
+      .db("url_shortner")
       .collection("users")
       .findOne({
         resetToken: token
@@ -212,23 +277,28 @@ app.post("/users/resetpass/:token", async (req, res) => {
     }
 
     //reseting the password
+    
     const {
       newpass
     } = req.body;
+
+    const salt = await bcrypt.genSalt(10);
+    console.log(`salt: ${salt}`);
+    const newhashedPassword = await bcrypt.hash(newpass, salt);
     await client
-      .db("shruthi")
+      .db("url_shortner")
       .collection("users")
       .updateOne({
         email: user.email
       }, {
         $set: {
-          password: newpass
+          password: newhashedPassword
         }
       });
     //console.log(`new pass is ${newpass}`);
     //Clearing the token
     await client
-      .db("shruthi")
+      .db("url_shortner")
       .collection("users")
       .updateOne({
         email: user.email
