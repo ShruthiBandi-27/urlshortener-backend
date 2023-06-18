@@ -295,7 +295,7 @@ app.post("/users/resetpass/:token", async (req, res) => {
           password: newhashedPassword
         }
       });
-    //console.log(`new pass is ${newpass}`);
+ 
     //Clearing the token
     await client
       .db("url_shortner")
