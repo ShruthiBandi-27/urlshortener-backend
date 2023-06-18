@@ -27,8 +27,8 @@ export const client = await createConnection();
 app.use(express.json());
 app.use(cors())
 
-app.get("/", auth, (req, res) => {
-  res.send("<h1>Hello,😊<br> Password Reset Application</h1>");
+app.get("/", (req, res) => {
+  res.send("<h1>Hello,😊<br> Welcome to URL shortener app</h1>");
 });
 
 //welcome API
